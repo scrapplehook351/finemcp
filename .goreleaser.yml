@@ -1,0 +1,218 @@
+version: 2
+
+# Before hooks run before building binaries
+before:
+  hooks:
+    # Ensure dependencies are up to date
+    - go mod tidy
+    # Run tests before building
+    - go test -race -short ./...
+
+# Build configuration
+builds:
+  - id: finemcp
+    main: ./cmd/finemcp
+    binary: finemcp
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    goarm:
+      - "7"
+    ignore:
+      # Reduce matrix size - focus on common platforms
+      - goos: freebsd
+        goarch: arm
+      - goos: freebsd
+        goarch: arm64
+    ldflags:
+      # Strip debug info and reduce binary size
+      - -s -w
+      # Inject version information
+      - -X main.Version={{.Version}}
+      - -X main.Commit={{.Commit}}
+      - -X main.Date={{.Date}}
+      - -X main.BuiltBy=goreleaser
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# Archive configuration
+archives:
+  - id: finemcp
+    format: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- .Version }}_
+      {{- .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - README.md
+      - LICENSE
+      - CHANGELOG.md
+      # Include examples directory if it exists
+      - examples/**/*
+      # Include docs if they exist
+      - docs/**/*
+
+# Checksums for all artifacts
+checksum:
+  name_template: 'checksums.txt'
+  algorithm: sha256
+
+# Changelog generation
+changelog:
+  use: github
+  sort: asc
+  abbrev: 7
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+  groups:
+    - title: '🚀 Features'
+      regexp: '^feat(\(.+\))?!?:'
+      order: 0
+    - title: '🐛 Bug Fixes'
+      regexp: '^fix(\(.+\))?!?:'
+      order: 1
+    - title: '⚡ Performance'
+      regexp: '^perf(\(.+\))?!?:'
+      order: 2
+    - title: '♻️ Refactoring'
+      regexp: '^refactor(\(.+\))?!?:'
+      order: 3
+    - title: '🔒 Security'
+      regexp: '^security(\(.+\))?!?:'
+      order: 4
+    - title: '📝 Documentation'
+      regexp: '^docs(\(.+\))?!?:'
+      order: 5
+    - title: '🔧 Other'
+      order: 999
+
+# GitHub Release configuration
+release:
+  github:
+    owner: finemcp
+    name: finemcp
+  
+  # Draft releases allow manual review before publishing
+  # Set to false for automatic publishing
+  draft: false
+  
+  # Auto-detect pre-releases from version (v1.0.0-beta.1 → pre-release)
+  prerelease: auto
+  
+  # Release name template
+  name_template: "FineMCP {{.Version}}"
+  
+  # Disable release notes (we'll use changelog)
+  disable: false
+  
+  # Add discussion category for releases (requires GitHub Discussions enabled)
+  # discussion_category_name: Releases
+
+# Homebrew tap (future enhancement)
+# Uncomment when you have a homebrew-tap repository
+# brews:
+#   - repository:
+#       owner: finemcp
+#       name: homebrew-tap
+#     folder: Formula
+#     homepage: https://finemcp.io
+#     description: Production-grade MCP (Model Context Protocol) framework for Go
+#     license: MIT
+#     commit_author:
+#       name: finemcp-bot
+#       email: bot@finemcp.io
+
+# Docker images
+dockers:
+  - image_templates:
+      - "ghcr.io/finemcp/finemcp:{{ .Tag }}-amd64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}-amd64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/finemcp/finemcp:latest-amd64"
+    dockerfile: Dockerfile
+    use: buildx
+    goos: linux
+    goarch: amd64
+    build_flag_templates:
+      - "--platform=linux/amd64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Production-grade MCP framework for Go"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+  - image_templates:
+      - "ghcr.io/finemcp/finemcp:{{ .Tag }}-arm64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}-arm64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}.{{ .Minor }}-arm64"
+      - "ghcr.io/finemcp/finemcp:latest-arm64"
+    dockerfile: Dockerfile
+    use: buildx
+    goos: linux
+    goarch: arm64
+    build_flag_templates:
+      - "--platform=linux/arm64"
+      - "--label=org.opencontainers.image.created={{.Date}}"
+      - "--label=org.opencontainers.image.title={{.ProjectName}}"
+      - "--label=org.opencontainers.image.revision={{.FullCommit}}"
+      - "--label=org.opencontainers.image.version={{.Version}}"
+      - "--label=org.opencontainers.image.source={{.GitURL}}"
+      - "--label=org.opencontainers.image.description=Production-grade MCP framework for Go"
+      - "--label=org.opencontainers.image.licenses=MIT"
+
+# Docker manifest for multi-arch support
+docker_manifests:
+  - name_template: "ghcr.io/finemcp/finemcp:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/finemcp/finemcp:{{ .Tag }}-amd64"
+      - "ghcr.io/finemcp/finemcp:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/finemcp/finemcp:v{{ .Major }}"
+    image_templates:
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}-amd64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}-arm64"
+
+  - name_template: "ghcr.io/finemcp/finemcp:v{{ .Major }}.{{ .Minor }}"
+    image_templates:
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}.{{ .Minor }}-amd64"
+      - "ghcr.io/finemcp/finemcp:v{{ .Major }}.{{ .Minor }}-arm64"
+
+  - name_template: "ghcr.io/finemcp/finemcp:latest"
+    image_templates:
+      - "ghcr.io/finemcp/finemcp:latest-amd64"
+      - "ghcr.io/finemcp/finemcp:latest-arm64"
+
+# Snapshot configuration (for testing releases locally)
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+# Announce configuration (optional, for future use)
+# announce:
+#   discord:
+#     enabled: true
+#     message_template: 'FineMCP {{ .Tag }} is out! Check it out: {{ .ReleaseURL }}'
+#   twitter:
+#     enabled: true
+#     message_template: '🚀 FineMCP {{ .Tag }} is now available! #golang #mcp {{ .ReleaseURL }}'

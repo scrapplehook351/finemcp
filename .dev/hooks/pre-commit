@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+# finemcp – pre-commit hook v1.1
+# Runs fast, local-only checks on staged Go files before each commit.
+# Installed by `make setup`.
+set -euo pipefail
+
+# ── Helpers ──────────────────────────────────────────────────────────
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+NC='\033[0m' # no colour
+
+info()  { printf "${GREEN}[pre-commit]${NC} %s\n" "$*"; }
+warn()  { printf "${YELLOW}[pre-commit]${NC} %s\n" "$*"; }
+fail()  { printf "${RED}[pre-commit]${NC} %s\n" "$*"; exit 1; }
+
+# ── Only run when Go files are staged ────────────────────────────────
+
+STAGED_GO=()
+while IFS= read -r file; do
+    STAGED_GO+=("$file")
+done < <(git diff --cached --name-only --diff-filter=ACM | grep '\.go$' || true)
+
+if [ ${#STAGED_GO[@]} -eq 0 ]; then
+    info "No staged Go files – skipping checks."
+    exit 0
+fi
+
+# Unique packages containing staged files — scope checks to only what changed.
+STAGED_PKGS=$(printf '%s\n' "${STAGED_GO[@]}" | xargs -n1 dirname | sort -u | sed 's|^|./|')
+
+# ── 1. Format check ─────────────────────────────────────────────────
+
+info "Checking formatting…"
+UNFORMATTED=$(gofmt -l "${STAGED_GO[@]}" 2>/dev/null || true)
+if [ -n "$UNFORMATTED" ]; then
+    printf "${RED}[pre-commit]${NC} The following files need formatting (run 'make fmt'):\n" >&2
+    printf "  %s\n" $UNFORMATTED >&2
+    exit 1
+fi
+
+# ── 2. Lint ──────────────────────────────────────────────────────────
+
+info "Running golangci-lint…"
+make lint || fail "lint failed (run 'make lint' to see details)"
+
+# ── 3. Vet ───────────────────────────────────────────────────────────
+
+info "Running go vet…"
+go vet $STAGED_PKGS || fail "go vet failed"
+
+# ── 4. Build ─────────────────────────────────────────────────────────
+
+info "Building…"
+go build $STAGED_PKGS || fail "go build failed"
+
+# ── 5. Tests (short mode for speed) ─────────────────────────────────
+
+info "Running tests (short mode)…"
+go test -race -count=1 -timeout 60s -short $STAGED_PKGS || fail "tests failed"
+
+info "All pre-commit checks passed ✓"

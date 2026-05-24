@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# finemcp – commit-msg hook v1.0
+# Enforces Conventional Commits format: <type>[optional scope]: <description>
+# Installed by `make setup`.
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+MSG_FILE="$1"
+MSG=$(head -1 "$MSG_FILE")
+
+# Allow merge commits through (detect via MERGE_HEAD).
+if git rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1; then
+    exit 0
+fi
+
+# Allow fixup/squash/amend prefixes through.
+if echo "$MSG" | grep -qE '^(Merge |fixup! |squash! |amend! )'; then
+    exit 0
+fi
+
+# Conventional Commits pattern:
+#   type(scope): description   OR   type: description
+# Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# Description must be at least 10 characters to encourage meaningful messages.
+PATTERN='^(feat|fix|docs|clean|style|refactor|perf|test|build|ci|chore|revert)(\([a-zA-Z0-9_/-]+\))?!?: .{10,}'
+
+if ! echo "$MSG" | grep -qE "$PATTERN"; then
+    printf "${RED}[commit-msg]${NC} Invalid commit message format.\n" >&2
+    printf "  Expected: ${GREEN}<type>[optional scope]: <description>${NC}\n" >&2
+    printf "  Types: feat, fix, docs, clean, style, refactor, perf, test, build, ci, chore, revert\n" >&2
+    printf "  Description must be at least 10 characters.\n" >&2
+    printf "  Example: feat(middleware): add rate-limit support\n" >&2
+    printf "  Got:     %s\n" "$MSG" >&2
+    exit 1
+fi

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# finemcp – pre-push hook v1.0
+# Runs the full lint + security suite before pushing.
+# Installed by `make setup`.
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+info() { printf "${GREEN}[pre-push]${NC} %s\n" "$*"; }
+fail() { printf "${RED}[pre-push]${NC} %s\n" "$*"; exit 1; }
+
+info "Running lint…"
+make lint || fail "lint failed — fix issues before pushing"
+
+info "Running security scan…"
+make sec || fail "security scan failed — fix issues before pushing"
+
+info "All pre-push checks passed ✓"

@@ -1,0 +1,44 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/basic
+/embedded
+/finemcp
+
+# Test
+*.test
+*.out
+coverage.out
+coverage.html
+*.prof
+*_debug_test.go
+benchmark_*.txt
+profile_*.txt
+*_results.txt
+
+# Build
+/bin/
+/dist/
+
+# Dependency
+/vendor/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debug
+__debug_bin*
+
+# Environment
+.env
+.env.local
+.github/agents/
+.claude/

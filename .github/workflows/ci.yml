@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    name: Go ${{ matrix.go-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        go-version: [ '1.26.x', '1.25.10' ]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          check-latest: true
+
+      - name: Cache Go build and modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+            ~/AppData/Local/go-build
+          key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.go-version }}-
+
+      - name: Show Go env
+        run: go env
+
+      # Windows: Makefile uses Unix-specific commands (find, grep, rm), so run Go commands directly
+      # Unix/macOS: Use Makefile for consistency with local development
+      - name: Install tools (cached)
+        if: runner.os != 'Windows'
+        run: make tools
+
+      - name: Run CI pipeline
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "Running CI on Windows (direct Go commands)"
+            go build ./...
+            go test -race -count=1 -timeout=120s ./...
+            go vet ./...
+          else
+            echo "Running CI on Unix (Makefile)"
+            make ci
+          fi
+
+      - name: Security scan (gosec)
+        if: runner.os != 'Windows'
+        run: make sec
